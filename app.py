@@ -4,11 +4,16 @@ from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-st.title("Customer Churn Data Cleaning, Preprocessing & EDA")
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, ConfusionMatrixDisplay
 
-# Load dataset (make sure DataChurn.csv is in the same folder as app.py)
+st.title("Customer Churn Prediction: Data Prep, EDA, and Modeling")
+
+# Load dataset (make sure DataChurn.csv is in the same folder)
 df = pd.read_csv('DataChurn.csv')
 
+# Show raw data preview
 st.write("### Raw Data Preview")
 st.dataframe(df.head())
 
@@ -87,20 +92,13 @@ st.dataframe(df.head())
 st.write("---")
 st.header("Exploratory Data Analysis (EDA)")
 
-# Use cleaned DataFrame for EDA plots
-eda_df = df.copy()
-
-# Ensure 'Churn' is 0/1 integer (it should already be from mapping, but confirm)
-if eda_df['Churn'].dtype != 'int64' and eda_df['Churn'].dtype != 'int32':
-    eda_df['Churn'] = eda_df['Churn'].astype(int)
-
-# 1. Histogram of tenure by churn (using original tenure before scaling)
-# To visualize meaningful tenure, reload original tenure column from raw CSV:
+# Use raw data for clear EDA plots with original scales
 raw_df = pd.read_csv('DataChurn.csv')
-raw_df['Churn'] = raw_df['Churn'].str.lower().map({'yes': 1, 'no': 0})
 raw_df['TotalCharges'] = pd.to_numeric(raw_df['TotalCharges'], errors='coerce')
 raw_df = raw_df.dropna(subset=['TotalCharges'])
+raw_df['Churn'] = raw_df['Churn'].str.lower().map({'yes': 1, 'no': 0})
 
+# 1. Histogram of tenure by churn
 st.subheader("1. Customer Tenure Distribution by Churn Status")
 fig1, ax1 = plt.subplots(figsize=(8,5))
 sns.histplot(data=raw_df, x='tenure', hue='Churn', multiple='stack', bins=30, ax=ax1)
@@ -116,7 +114,7 @@ sns.barplot(x='Contract', y='Churn', data=contract_churn, ax=ax2)
 ax2.set_ylabel('Churn Rate')
 st.pyplot(fig2)
 
-# 3. Correlation heatmap of numeric features and churn (using raw_df)
+# 3. Correlation heatmap
 st.subheader("3. Correlation Heatmap of Numeric Features")
 numeric_cols = ['tenure', 'MonthlyCharges', 'TotalCharges', 'Churn']
 corr = raw_df[numeric_cols].corr()
@@ -124,7 +122,6 @@ fig3, ax3 = plt.subplots(figsize=(8,6))
 sns.heatmap(corr, annot=True, cmap='coolwarm', fmt='.2f', ax=ax3)
 st.pyplot(fig3)
 
-# Insights
 st.write("---")
 st.header("Key Insights")
 
@@ -133,3 +130,50 @@ st.markdown("""
 - **Contract Type:** Month-to-month customers have a significantly higher churn rate compared to customers on longer contracts, showing contract length helps retention.
 - **Correlations:** Churn is negatively correlated with tenure and positively correlated with MonthlyCharges, meaning customers who stay longer churn less, and higher monthly charges might increase churn risk.
 """)
+
+# === MODEL BUILDING AND EVALUATION ===
+st.write("---")
+st.header("Model Building and Evaluation")
+
+# Prepare features and target
+X = df.drop(columns=['Churn'])
+y = df['Churn']
+
+# Split train/test
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
+
+# Initialize Random Forest model
+model = RandomForestClassifier(random_state=42)
+
+# Cross-validation
+cv_scores = cross_val_score(model, X_train, y_train, cv=5, scoring='f1')
+st.write(f"5-fold Cross-Validation F1 Scores: {cv_scores}")
+st.write(f"Mean CV F1 Score: {cv_scores.mean():.4f}")
+
+# Train on full training set
+model.fit(X_train, y_train)
+
+# Predict on test set
+y_pred = model.predict(X_test)
+
+# Performance metrics
+acc = accuracy_score(y_test, y_pred)
+prec = precision_score(y_test, y_pred)
+rec = recall_score(y_test, y_pred)
+f1 = f1_score(y_test, y_pred)
+
+st.write("### Model Performance on Test Set")
+st.write(f"Accuracy: {acc:.4f}")
+st.write(f"Precision: {prec:.4f}")
+st.write(f"Recall: {rec:.4f}")
+st.write(f"F1 Score: {f1:.4f}")
+
+# Confusion matrix
+cm = confusion_matrix(y_test, y_pred)
+disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=['No Churn', 'Churn'])
+
+fig_cm, ax_cm = plt.subplots(figsize=(6,6))
+disp.plot(ax=ax_cm)
+st.pyplot(fig_cm)
