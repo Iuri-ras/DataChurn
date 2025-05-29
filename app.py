@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import joblib  # if you have a saved model
+from sklearn.preprocessing import MinMaxScaler
 
 st.title("Customer Churn Prediction")
 
