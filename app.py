@@ -6,7 +6,7 @@ import seaborn as sns
 
 st.title("Customer Churn Data Cleaning, Preprocessing & EDA")
 
-# Load dataset directly (make sure the file is in the same folder)
+# Load dataset (make sure DataChurn.csv is in the same folder as app.py)
 df = pd.read_csv('DataChurn.csv')
 
 st.write("### Raw Data Preview")
@@ -87,32 +87,39 @@ st.dataframe(df.head())
 st.write("---")
 st.header("Exploratory Data Analysis (EDA)")
 
-# Prepare a copy of original df for EDA plots
-eda_df = pd.read_csv('telco_customer_churn.csv')
-eda_df['TotalCharges'] = pd.to_numeric(eda_df['TotalCharges'], errors='coerce')
-eda_df = eda_df.dropna(subset=['TotalCharges'])
-eda_df['Churn'] = eda_df['Churn'].str.lower().map({'yes': 1, 'no': 0})
+# Use cleaned DataFrame for EDA plots
+eda_df = df.copy()
 
-# 1. Histogram of tenure by churn
+# Ensure 'Churn' is 0/1 integer (it should already be from mapping, but confirm)
+if eda_df['Churn'].dtype != 'int64' and eda_df['Churn'].dtype != 'int32':
+    eda_df['Churn'] = eda_df['Churn'].astype(int)
+
+# 1. Histogram of tenure by churn (using original tenure before scaling)
+# To visualize meaningful tenure, reload original tenure column from raw CSV:
+raw_df = pd.read_csv('DataChurn.csv')
+raw_df['Churn'] = raw_df['Churn'].str.lower().map({'yes': 1, 'no': 0})
+raw_df['TotalCharges'] = pd.to_numeric(raw_df['TotalCharges'], errors='coerce')
+raw_df = raw_df.dropna(subset=['TotalCharges'])
+
 st.subheader("1. Customer Tenure Distribution by Churn Status")
 fig1, ax1 = plt.subplots(figsize=(8,5))
-sns.histplot(data=eda_df, x='tenure', hue='Churn', multiple='stack', bins=30, ax=ax1)
+sns.histplot(data=raw_df, x='tenure', hue='Churn', multiple='stack', bins=30, ax=ax1)
 ax1.set_xlabel('Tenure (months)')
 ax1.set_ylabel('Number of Customers')
 st.pyplot(fig1)
 
 # 2. Bar plot of churn rate by contract type
 st.subheader("2. Churn Rate by Contract Type")
-contract_churn = eda_df.groupby('Contract')['Churn'].mean().reset_index()
+contract_churn = raw_df.groupby('Contract')['Churn'].mean().reset_index()
 fig2, ax2 = plt.subplots(figsize=(6,4))
 sns.barplot(x='Contract', y='Churn', data=contract_churn, ax=ax2)
 ax2.set_ylabel('Churn Rate')
 st.pyplot(fig2)
 
-# 3. Correlation heatmap
+# 3. Correlation heatmap of numeric features and churn (using raw_df)
 st.subheader("3. Correlation Heatmap of Numeric Features")
 numeric_cols = ['tenure', 'MonthlyCharges', 'TotalCharges', 'Churn']
-corr = eda_df[numeric_cols].corr()
+corr = raw_df[numeric_cols].corr()
 fig3, ax3 = plt.subplots(figsize=(8,6))
 sns.heatmap(corr, annot=True, cmap='coolwarm', fmt='.2f', ax=ax3)
 st.pyplot(fig3)
