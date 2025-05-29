@@ -205,27 +205,26 @@ elif page == "Predict Churn":
                 'TotalCharges': TotalCharges,
             }
 
+            # Fix replacement for simplified categories:
             cols_to_simplify = [
                 'MultipleLines', 'OnlineSecurity', 'OnlineBackup',
                 'DeviceProtection', 'TechSupport', 'StreamingTV', 'StreamingMovies'
             ]
+
             for col in cols_to_simplify:
-                input_dict[col] = input_dict[col].replace({'No internet service': 'No', 'No phone service': 'No'})
+                if input_dict[col] in ['No internet service', 'No phone service']:
+                    input_dict[col] = 'No'
 
             input_df = pd.DataFrame([input_dict])
 
-            # One-hot encode categorical variables
             input_df = pd.get_dummies(input_df, columns=categorical_cols)
 
-            # Add missing columns
             missing_cols = set(X.columns) - set(input_df.columns)
             for c in missing_cols:
                 input_df[c] = 0
 
-            # Reorder columns
             input_df = input_df[X.columns]
 
-            # Normalize numeric columns
             for col in ['MonthlyCharges', 'TotalCharges', 'tenure']:
                 idx = list(scaler.feature_names_in_).index(col)
                 min_val = scaler.data_min_[idx]
