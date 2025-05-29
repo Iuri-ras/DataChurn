@@ -9,47 +9,25 @@ from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, ConfusionMatrixDisplay
 import numpy as np
 
-st.title("Customer Churn Prediction: Data Preparation, EDA & Modeling")
+st.title("Customer Churn Prediction: Data Preparation, EDA, Modeling & Deployment Prototype")
 
 st.markdown("""
-This app performs data cleaning, exploratory data analysis (EDA), builds a Random Forest model to predict customer churn,
-and explains model results with performance metrics and feature importance.
+This app performs data cleaning, exploratory data analysis (EDA), trains a Random Forest model to predict customer churn,  
+and lets you input customer data for live churn prediction.
 """)
 
-# Load dataset
+# --- Load and preprocess dataset ---
 df = pd.read_csv('DataChurn.csv')
 
-# --- Raw Data Preview ---
-st.header("1. Raw Data Preview")
-st.write("Here's a sample of the original dataset before any cleaning or preprocessing:")
-st.dataframe(df.head())
-
-# --- Data Cleaning and Preprocessing ---
-st.header("2. Data Cleaning & Preprocessing")
-
-st.write("**Checking missing values in each column:**")
-st.write(df.isnull().sum())
-
-st.write("Converting 'TotalCharges' to numeric. Invalid parsing will be coerced to NaN.")
+# Data cleaning & preprocessing (same as before)
 df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
-st.write(f"Missing values in 'TotalCharges' after conversion: {df['TotalCharges'].isnull().sum()}")
-
-st.write("Rows with missing 'TotalCharges' (typically customers with tenure = 0):")
-missing_rows = df[df['TotalCharges'].isnull()]
-st.dataframe(missing_rows[['customerID', 'tenure', 'TotalCharges']])
-
-st.write("Dropping rows with missing 'TotalCharges' to clean data.")
 df = df.dropna(subset=['TotalCharges'])
-
-st.write(f"Duplicate customer IDs found: {df['customerID'].duplicated().sum()}. Dropping 'customerID' as it's not needed for modeling.")
 df = df.drop(columns=['customerID'])
 
-st.write("Converting binary categorical columns to lowercase for consistency.")
 binary_cols = ['Partner', 'Dependents', 'PhoneService', 'PaperlessBilling', 'Churn']
 for col in binary_cols:
     df[col] = df[col].str.lower()
 
-st.write("Simplifying categories 'No internet service' and 'No phone service' to 'No' in multiple columns.")
 cols_to_simplify = [
     'MultipleLines', 'OnlineSecurity', 'OnlineBackup',
     'DeviceProtection', 'TechSupport', 'StreamingTV', 'StreamingMovies'
@@ -57,23 +35,14 @@ cols_to_simplify = [
 for col in cols_to_simplify:
     df[col] = df[col].replace({'No internet service': 'No', 'No phone service': 'No'})
 
-st.write("Final check for missing values after cleaning:")
-st.write(df.isnull().sum())
-
-st.write("Data types after cleaning:")
-st.write(df.dtypes)
-
-st.write(f"Cleaned dataset shape: {df.shape}")
-
-st.write("Encoding binary columns to numeric (yes=1, no=0, female=0, male=1).")
 binary_cols = ['gender', 'Partner', 'Dependents', 'PhoneService', 'PaperlessBilling', 'Churn']
 for col in binary_cols:
     df[col] = df[col].map({'yes': 1, 'no': 0, 'female': 0, 'male': 1})
 
-st.write("Applying one-hot encoding to categorical columns.")
 categorical_cols = ['MultipleLines', 'InternetService', 'OnlineSecurity',
                     'OnlineBackup', 'DeviceProtection', 'TechSupport',
                     'StreamingTV', 'StreamingMovies', 'Contract', 'PaymentMethod']
+
 df = pd.get_dummies(df, columns=categorical_cols)
 
 def tenure_group(tenure):
@@ -88,122 +57,92 @@ def tenure_group(tenure):
     else:
         return '5+ years'
 
-st.write("Creating a new feature 'tenure_group' by grouping tenure into categories.")
 df['tenure_group'] = df['tenure'].apply(tenure_group)
 df = pd.get_dummies(df, columns=['tenure_group'])
 
-st.write("Normalizing numeric features 'MonthlyCharges', 'TotalCharges', and 'tenure' with Min-Max scaling.")
 scaler = MinMaxScaler()
 df[['MonthlyCharges', 'TotalCharges', 'tenure']] = scaler.fit_transform(
     df[['MonthlyCharges', 'TotalCharges', 'tenure']]
 )
 
-st.write(f"Transformed dataset shape: {df.shape}")
-st.write("Sample of the transformed data:")
+# Show a bit of cleaned data
+st.header("1. Cleaned & Preprocessed Data Sample")
 st.dataframe(df.head())
 
-# --- Exploratory Data Analysis ---
-st.header("3. Exploratory Data Analysis (EDA)")
+# --- EDA ---
+st.header("2. Exploratory Data Analysis")
 
-st.markdown("""
-The following visualizations help us understand the distribution of key variables and their relationships with churn.
-""")
-
-# Prepare raw data for EDA (original scales for easier interpretation)
 raw_df = pd.read_csv('DataChurn.csv')
 raw_df['TotalCharges'] = pd.to_numeric(raw_df['TotalCharges'], errors='coerce')
 raw_df = raw_df.dropna(subset=['TotalCharges'])
 raw_df['Churn'] = raw_df['Churn'].str.lower().map({'yes': 1, 'no': 0})
 
-st.subheader("3.1 Customer Tenure Distribution by Churn Status")
+st.subheader("2.1 Customer Tenure Distribution by Churn Status")
 fig1, ax1 = plt.subplots(figsize=(8,5))
 sns.histplot(data=raw_df, x='tenure', hue='Churn', multiple='stack', bins=30, ax=ax1)
 ax1.set_xlabel('Tenure (months)')
 ax1.set_ylabel('Number of Customers')
 st.pyplot(fig1)
-st.write("**Insight:** Customers who churn tend to have shorter tenures, many leaving within the first 1-2 years.")
 
-st.subheader("3.2 Churn Rate by Contract Type")
+st.subheader("2.2 Churn Rate by Contract Type")
 contract_churn = raw_df.groupby('Contract')['Churn'].mean().reset_index()
 fig2, ax2 = plt.subplots(figsize=(6,4))
 sns.barplot(x='Contract', y='Churn', data=contract_churn, ax=ax2)
 ax2.set_ylabel('Churn Rate')
 st.pyplot(fig2)
-st.write("**Insight:** Month-to-month contracts show higher churn rates than longer-term contracts, indicating contract length improves retention.")
 
-st.subheader("3.3 Correlation Heatmap")
+st.subheader("2.3 Correlation Heatmap")
 numeric_cols = ['tenure', 'MonthlyCharges', 'TotalCharges', 'Churn']
 corr = raw_df[numeric_cols].corr()
 fig3, ax3 = plt.subplots(figsize=(8,6))
 sns.heatmap(corr, annot=True, cmap='coolwarm', fmt='.2f', ax=ax3)
 st.pyplot(fig3)
-st.write("**Insight:** Churn correlates negatively with tenure and positively with MonthlyCharges, meaning longer-tenured customers churn less, while higher bills may increase churn risk.")
 
-# --- Model Building and Evaluation ---
-st.header("4. Model Building and Evaluation")
+# --- Model Training & Evaluation ---
+st.header("3. Model Training and Evaluation")
 
-st.markdown("""
-We train a **Random Forest Classifier** to predict churn.  
-The model is evaluated using 5-fold cross-validation and tested on a held-out test set.  
-Key performance metrics and a confusion matrix are presented below.
-""")
-
-# Prepare features and target
 X = df.drop(columns=['Churn'])
 y = df['Churn']
 
-# Train-test split
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42, stratify=y
 )
 
-# Initialize model
 model = RandomForestClassifier(random_state=42)
-
-# Cross-validation
 cv_scores = cross_val_score(model, X_train, y_train, cv=5, scoring='f1')
+
 st.write(f"5-fold Cross-Validation F1 Scores: {cv_scores}")
 st.write(f"Mean Cross-Validation F1 Score: {cv_scores.mean():.4f}")
 
-# Train on full train set
 model.fit(X_train, y_train)
-
-# Predict test set
 y_pred = model.predict(X_test)
 
-# Calculate metrics
 acc = accuracy_score(y_test, y_pred)
 prec = precision_score(y_test, y_pred)
 rec = recall_score(y_test, y_pred)
 f1 = f1_score(y_test, y_pred)
 
-st.subheader("Test Set Performance")
+st.subheader("3.1 Test Set Performance Metrics")
 st.write(f"- Accuracy: {acc:.4f}")
 st.write(f"- Precision: {prec:.4f}")
 st.write(f"- Recall: {rec:.4f}")
 st.write(f"- F1 Score: {f1:.4f}")
 
-# Confusion matrix plot
 cm = confusion_matrix(y_test, y_pred)
 disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=['No Churn', 'Churn'])
 fig_cm, ax_cm = plt.subplots(figsize=(6,6))
 disp.plot(ax=ax_cm)
 st.pyplot(fig_cm)
-st.write("**Confusion Matrix:** Shows true vs. predicted labels to understand errors.")
 
-# --- Model Interpretation ---
-st.header("5. Model Interpretation and Summary")
-
+st.header("3.2 Model Interpretation")
 st.markdown(f"""
-Our Random Forest model achieved an **F1 Score of {f1:.3f}** on the test set, which indicates a good balance between identifying customers who churn (recall) and minimizing false alarms (precision).
+Our Random Forest model achieved an **F1 Score of {f1:.3f}** on the test set,  
+indicating a good balance between identifying customers who churn (recall) and minimizing false positives (precision).
 
-- The model’s confusion matrix above visualizes true and false predictions for churn.
-- Because customer churn is costly, prioritizing **recall** helps the company identify most at-risk customers and proactively intervene.
-- Random Forest is an ensemble of decision trees, providing robustness and reducing overfitting.
-- Below is a plot of **feature importance**, showing which variables most influence the model’s predictions.
+Random Forests combine many decision trees to improve prediction stability and accuracy.  
+Feature importance plot below shows which features most influence the model's predictions.
 """)
 
-# Feature importance plot
 importances = model.feature_importances_
 feature_names = X.columns
 indices = np.argsort(importances)[::-1]
@@ -214,3 +153,91 @@ ax_feat.set_title("Feature Importance")
 ax_feat.set_xlabel("Importance")
 ax_feat.set_ylabel("Feature")
 st.pyplot(fig_feat)
+
+# --- Deployment Prototype: User Input for Prediction ---
+st.header("4. Predict Customer Churn for New Data")
+
+st.markdown("Fill out the customer information below and click 'Predict Churn'.")
+
+with st.form("input_form"):
+    gender = st.selectbox("Gender", ["Female", "Male"])
+    SeniorCitizen = st.selectbox("Senior Citizen", [0,1])
+    Partner = st.selectbox("Partner", ["Yes", "No"])
+    Dependents = st.selectbox("Dependents", ["Yes", "No"])
+    tenure = st.slider("Tenure (months)", 0, 72, 12)
+    PhoneService = st.selectbox("Phone Service", ["Yes", "No"])
+    MultipleLines = st.selectbox("Multiple Lines", ["No", "Yes", "No phone service"])
+    InternetService = st.selectbox("Internet Service", ["DSL", "Fiber optic", "No"])
+    OnlineSecurity = st.selectbox("Online Security", ["Yes", "No", "No internet service"])
+    OnlineBackup = st.selectbox("Online Backup", ["Yes", "No", "No internet service"])
+    DeviceProtection = st.selectbox("Device Protection", ["Yes", "No", "No internet service"])
+    TechSupport = st.selectbox("Tech Support", ["Yes", "No", "No internet service"])
+    StreamingTV = st.selectbox("Streaming TV", ["Yes", "No", "No internet service"])
+    StreamingMovies = st.selectbox("Streaming Movies", ["Yes", "No", "No internet service"])
+    Contract = st.selectbox("Contract", ["Month-to-month", "One year", "Two year"])
+    PaperlessBilling = st.selectbox("Paperless Billing", ["Yes", "No"])
+    PaymentMethod = st.selectbox("Payment Method", [
+        "Electronic check", "Mailed check", "Bank transfer (automatic)", "Credit card (automatic)"])
+    MonthlyCharges = st.number_input("Monthly Charges", 0.0, 200.0, 70.0)
+    TotalCharges = st.number_input("Total Charges", 0.0, 10000.0, 1000.0)
+    
+    submit = st.form_submit_button("Predict Churn")
+
+if submit:
+    input_dict = {
+        'gender': 1 if gender.lower() == 'male' else 0,
+        'SeniorCitizen': SeniorCitizen,
+        'Partner': 1 if Partner.lower() == 'yes' else 0,
+        'Dependents': 1 if Dependents.lower() == 'yes' else 0,
+        'tenure': tenure,
+        'PhoneService': 1 if PhoneService.lower() == 'yes' else 0,
+        'MultipleLines': MultipleLines,
+        'InternetService': InternetService,
+        'OnlineSecurity': OnlineSecurity,
+        'OnlineBackup': OnlineBackup,
+        'DeviceProtection': DeviceProtection,
+        'TechSupport': TechSupport,
+        'StreamingTV': StreamingTV,
+        'StreamingMovies': StreamingMovies,
+        'Contract': Contract,
+        'PaperlessBilling': 1 if PaperlessBilling.lower() == 'yes' else 0,
+        'PaymentMethod': PaymentMethod,
+        'MonthlyCharges': MonthlyCharges,
+        'TotalCharges': TotalCharges,
+    }
+
+    input_df = pd.DataFrame([input_dict])
+
+    # Simplify no internet/phone service values
+    cols_to_simplify = [
+        'MultipleLines', 'OnlineSecurity', 'OnlineBackup',
+        'DeviceProtection', 'TechSupport', 'StreamingTV', 'StreamingMovies'
+    ]
+    for col in cols_to_simplify:
+        input_df[col] = input_df[col].replace({'No internet service': 'No', 'No phone service': 'No'})
+
+    # One-hot encode categorical variables to match training data
+    input_df = pd.get_dummies(input_df, columns=categorical_cols)
+
+    # Add any missing columns (set to 0)
+    missing_cols = set(X.columns) - set(input_df.columns)
+    for c in missing_cols:
+        input_df[c] = 0
+
+    # Ensure the columns order matches training data
+    input_df = input_df[X.columns]
+
+    # Normalize numeric columns using same scaler fitted before
+    for col in ['MonthlyCharges', 'TotalCharges', 'tenure']:
+        idx = list(scaler.feature_names_in_).index(col)
+        min_val = scaler.data_min_[idx]
+        max_val = scaler.data_max_[idx]
+        input_df[col] = (input_df[col] - min_val) / (max_val - min_val)
+
+    # Predict churn probability and class
+    pred_prob = model.predict_proba(input_df)[0][1]
+    pred_class = model.predict(input_df)[0]
+
+    st.subheader("Prediction Results")
+    st.write(f"**Churn Probability:** {pred_prob:.2%}")
+    st.write(f"**Predicted Class:** {'Churn' if pred_class == 1 else 'No Churn'}")
