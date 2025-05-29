@@ -186,4 +186,56 @@ elif page == "Predict Churn":
             input_dict = {
                 'gender': 1 if gender.lower() == 'male' else 0,
                 'SeniorCitizen': SeniorCitizen,
-                'Partner': 1
+                'Partner': 1 if Partner.lower() == 'yes' else 0,
+                'Dependents': 1 if Dependents.lower() == 'yes' else 0,
+                'tenure': tenure,
+                'PhoneService': 1 if PhoneService.lower() == 'yes' else 0,
+                'MultipleLines': MultipleLines,
+                'InternetService': InternetService,
+                'OnlineSecurity': OnlineSecurity,
+                'OnlineBackup': OnlineBackup,
+                'DeviceProtection': DeviceProtection,
+                'TechSupport': TechSupport,
+                'StreamingTV': StreamingTV,
+                'StreamingMovies': StreamingMovies,
+                'Contract': Contract,
+                'PaperlessBilling': 1 if PaperlessBilling.lower() == 'yes' else 0,
+                'PaymentMethod': PaymentMethod,
+                'MonthlyCharges': MonthlyCharges,
+                'TotalCharges': TotalCharges,
+            }
+
+            cols_to_simplify = [
+                'MultipleLines', 'OnlineSecurity', 'OnlineBackup',
+                'DeviceProtection', 'TechSupport', 'StreamingTV', 'StreamingMovies'
+            ]
+            for col in cols_to_simplify:
+                input_dict[col] = input_dict[col].replace({'No internet service': 'No', 'No phone service': 'No'})
+
+            input_df = pd.DataFrame([input_dict])
+
+            # One-hot encode categorical variables
+            input_df = pd.get_dummies(input_df, columns=categorical_cols)
+
+            # Add missing columns
+            missing_cols = set(X.columns) - set(input_df.columns)
+            for c in missing_cols:
+                input_df[c] = 0
+
+            # Reorder columns
+            input_df = input_df[X.columns]
+
+            # Normalize numeric columns
+            for col in ['MonthlyCharges', 'TotalCharges', 'tenure']:
+                idx = list(scaler.feature_names_in_).index(col)
+                min_val = scaler.data_min_[idx]
+                max_val = scaler.data_max_[idx]
+                input_df[col] = (input_df[col] - min_val) / (max_val - min_val)
+
+            pred_prob = model.predict_proba(input_df)[0][1]
+            pred_class = model.predict(input_df)[0]
+
+            if pred_class == 1:
+                st.error(f"⚠️ High risk of churn detected! Probability: {pred_prob:.2%}")
+            else:
+                st.success(f"✅ Customer likely to stay. Churn Probability: {pred_prob:.2%}")
