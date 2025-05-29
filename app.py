@@ -8,37 +8,47 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, ConfusionMatrixDisplay
 
-st.title("Customer Churn Prediction: Data Prep, EDA, and Modeling")
+st.title("Customer Churn Prediction: Data Preparation, EDA & Modeling")
 
-# Load dataset (make sure DataChurn.csv is in the same folder)
+st.markdown("""
+This app performs data cleaning, exploratory data analysis (EDA), and builds a Random Forest model to predict customer churn.
+Upload your dataset as 'DataChurn.csv' in the same directory and run this app.
+""")
+
+# Load dataset
 df = pd.read_csv('DataChurn.csv')
 
-# Show raw data preview
-st.write("### Raw Data Preview")
+# --- Raw Data Preview ---
+st.header("1. Raw Data Preview")
+st.write("Here's a sample of the original dataset before any cleaning or preprocessing:")
 st.dataframe(df.head())
 
-# Data cleaning and preprocessing
-st.write("### Data Cleaning and Preprocessing")
+# --- Data Cleaning and Preprocessing ---
+st.header("2. Data Cleaning & Preprocessing")
 
-st.write("Missing values per column:")
+st.write("**Checking missing values in each column:**")
 st.write(df.isnull().sum())
 
+st.write("Converting 'TotalCharges' to numeric. Invalid parsing will be coerced to NaN.")
 df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
-st.write("Missing values in 'TotalCharges':", df['TotalCharges'].isnull().sum())
+st.write(f"Missing values in 'TotalCharges' after conversion: {df['TotalCharges'].isnull().sum()}")
 
+st.write("Rows with missing 'TotalCharges' (typically customers with tenure = 0):")
 missing_rows = df[df['TotalCharges'].isnull()]
-st.write("Rows with missing TotalCharges:")
-st.write(missing_rows[['customerID', 'tenure', 'TotalCharges']])
+st.dataframe(missing_rows[['customerID', 'tenure', 'TotalCharges']])
 
+st.write("Dropping rows with missing 'TotalCharges' to clean data.")
 df = df.dropna(subset=['TotalCharges'])
 
-st.write("Number of duplicate customerIDs:", df['customerID'].duplicated().sum())
+st.write(f"Duplicate customer IDs found: {df['customerID'].duplicated().sum()}. Dropping 'customerID' as it's not needed for modeling.")
 df = df.drop(columns=['customerID'])
 
+st.write("Converting binary categorical columns to lowercase for consistency.")
 binary_cols = ['Partner', 'Dependents', 'PhoneService', 'PaperlessBilling', 'Churn']
 for col in binary_cols:
     df[col] = df[col].str.lower()
 
+st.write("Simplifying categories 'No internet service' and 'No phone service' to 'No' in multiple columns.")
 cols_to_simplify = [
     'MultipleLines', 'OnlineSecurity', 'OnlineBackup',
     'DeviceProtection', 'TechSupport', 'StreamingTV', 'StreamingMovies'
@@ -46,22 +56,23 @@ cols_to_simplify = [
 for col in cols_to_simplify:
     df[col] = df[col].replace({'No internet service': 'No', 'No phone service': 'No'})
 
-st.write("Missing values after cleaning:")
+st.write("Final check for missing values after cleaning:")
 st.write(df.isnull().sum())
 
 st.write("Data types after cleaning:")
 st.write(df.dtypes)
 
-st.write("Cleaned dataset shape:", df.shape)
+st.write(f"Cleaned dataset shape: {df.shape}")
 
+st.write("Encoding binary columns to numeric (yes=1, no=0, female=0, male=1).")
 binary_cols = ['gender', 'Partner', 'Dependents', 'PhoneService', 'PaperlessBilling', 'Churn']
 for col in binary_cols:
     df[col] = df[col].map({'yes': 1, 'no': 0, 'female': 0, 'male': 1})
 
+st.write("Applying one-hot encoding to categorical columns.")
 categorical_cols = ['MultipleLines', 'InternetService', 'OnlineSecurity',
                     'OnlineBackup', 'DeviceProtection', 'TechSupport',
                     'StreamingTV', 'StreamingMovies', 'Contract', 'PaymentMethod']
-
 df = pd.get_dummies(df, columns=categorical_cols)
 
 def tenure_group(tenure):
@@ -76,104 +87,106 @@ def tenure_group(tenure):
     else:
         return '5+ years'
 
+st.write("Creating a new feature 'tenure_group' by grouping tenure into categories.")
 df['tenure_group'] = df['tenure'].apply(tenure_group)
 df = pd.get_dummies(df, columns=['tenure_group'])
 
+st.write("Normalizing numeric features 'MonthlyCharges', 'TotalCharges', and 'tenure' with Min-Max scaling.")
 scaler = MinMaxScaler()
 df[['MonthlyCharges', 'TotalCharges', 'tenure']] = scaler.fit_transform(
     df[['MonthlyCharges', 'TotalCharges', 'tenure']]
 )
 
-st.write("Transformed dataset shape:", df.shape)
-st.write("Sample transformed data:")
+st.write(f"Transformed dataset shape: {df.shape}")
+st.write("Sample of the transformed data:")
 st.dataframe(df.head())
 
-# === EDA VISUALIZATIONS ===
-st.write("---")
-st.header("Exploratory Data Analysis (EDA)")
+# --- Exploratory Data Analysis ---
+st.header("3. Exploratory Data Analysis (EDA)")
 
-# Use raw data for clear EDA plots with original scales
+st.markdown("""
+The following visualizations help us understand the distribution of key variables and their relationships with churn.
+""")
+
+# Prepare raw data for EDA (original scales for easier interpretation)
 raw_df = pd.read_csv('DataChurn.csv')
 raw_df['TotalCharges'] = pd.to_numeric(raw_df['TotalCharges'], errors='coerce')
 raw_df = raw_df.dropna(subset=['TotalCharges'])
 raw_df['Churn'] = raw_df['Churn'].str.lower().map({'yes': 1, 'no': 0})
 
-# 1. Histogram of tenure by churn
-st.subheader("1. Customer Tenure Distribution by Churn Status")
+st.subheader("3.1 Customer Tenure Distribution by Churn Status")
 fig1, ax1 = plt.subplots(figsize=(8,5))
 sns.histplot(data=raw_df, x='tenure', hue='Churn', multiple='stack', bins=30, ax=ax1)
 ax1.set_xlabel('Tenure (months)')
 ax1.set_ylabel('Number of Customers')
 st.pyplot(fig1)
+st.write("**Insight:** Customers who churn tend to have shorter tenures, many leaving within the first 1-2 years.")
 
-# 2. Bar plot of churn rate by contract type
-st.subheader("2. Churn Rate by Contract Type")
+st.subheader("3.2 Churn Rate by Contract Type")
 contract_churn = raw_df.groupby('Contract')['Churn'].mean().reset_index()
 fig2, ax2 = plt.subplots(figsize=(6,4))
 sns.barplot(x='Contract', y='Churn', data=contract_churn, ax=ax2)
 ax2.set_ylabel('Churn Rate')
 st.pyplot(fig2)
+st.write("**Insight:** Month-to-month contracts show higher churn rates than longer-term contracts, indicating contract length improves retention.")
 
-# 3. Correlation heatmap
-st.subheader("3. Correlation Heatmap of Numeric Features")
+st.subheader("3.3 Correlation Heatmap")
 numeric_cols = ['tenure', 'MonthlyCharges', 'TotalCharges', 'Churn']
 corr = raw_df[numeric_cols].corr()
 fig3, ax3 = plt.subplots(figsize=(8,6))
 sns.heatmap(corr, annot=True, cmap='coolwarm', fmt='.2f', ax=ax3)
 st.pyplot(fig3)
+st.write("**Insight:** Churn correlates negatively with tenure and positively with MonthlyCharges, meaning longer-tenured customers churn less, while higher bills may increase churn risk.")
 
-st.write("---")
-st.header("Key Insights")
+# --- Model Building and Evaluation ---
+st.header("4. Model Building and Evaluation")
 
 st.markdown("""
-- **Tenure Distribution:** Customers who churn generally have lower tenure, indicating many leave within the first 1-2 years.
-- **Contract Type:** Month-to-month customers have a significantly higher churn rate compared to customers on longer contracts, showing contract length helps retention.
-- **Correlations:** Churn is negatively correlated with tenure and positively correlated with MonthlyCharges, meaning customers who stay longer churn less, and higher monthly charges might increase churn risk.
+We train a **Random Forest Classifier** to predict churn.  
+The model is evaluated using 5-fold cross-validation and tested on a held-out test set.  
+Key performance metrics and a confusion matrix are presented below.
 """)
-
-# === MODEL BUILDING AND EVALUATION ===
-st.write("---")
-st.header("Model Building and Evaluation")
 
 # Prepare features and target
 X = df.drop(columns=['Churn'])
 y = df['Churn']
 
-# Split train/test
+# Train-test split
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42, stratify=y
 )
 
-# Initialize Random Forest model
+# Initialize model
 model = RandomForestClassifier(random_state=42)
 
 # Cross-validation
 cv_scores = cross_val_score(model, X_train, y_train, cv=5, scoring='f1')
 st.write(f"5-fold Cross-Validation F1 Scores: {cv_scores}")
-st.write(f"Mean CV F1 Score: {cv_scores.mean():.4f}")
+st.write(f"Mean Cross-Validation F1 Score: {cv_scores.mean():.4f}")
 
-# Train on full training set
+# Train on full train set
 model.fit(X_train, y_train)
 
-# Predict on test set
+# Predict test set
 y_pred = model.predict(X_test)
 
-# Performance metrics
+# Calculate metrics
 acc = accuracy_score(y_test, y_pred)
 prec = precision_score(y_test, y_pred)
 rec = recall_score(y_test, y_pred)
 f1 = f1_score(y_test, y_pred)
 
-st.write("### Model Performance on Test Set")
-st.write(f"Accuracy: {acc:.4f}")
-st.write(f"Precision: {prec:.4f}")
-st.write(f"Recall: {rec:.4f}")
-st.write(f"F1 Score: {f1:.4f}")
+st.subheader("Test Set Performance")
+st.write(f"- Accuracy: {acc:.4f}")
+st.write(f"- Precision: {prec:.4f}")
+st.write(f"- Recall: {rec:.4f}")
+st.write(f"- F1 Score: {f1:.4f}")
 
-# Confusion matrix
+# Confusion matrix plot
 cm = confusion_matrix(y_test, y_pred)
 disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=['No Churn', 'Churn'])
-
 fig_cm, ax_cm = plt.subplots(figsize=(6,6))
 disp.plot(ax=ax_cm)
 st.pyplot(fig_cm)
+st.write("**Confusion Matrix:** Shows true vs. predicted labels to understand errors.")
+
