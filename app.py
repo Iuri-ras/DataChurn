@@ -7,7 +7,7 @@ import seaborn as sns
 st.title("Customer Churn Data Cleaning, Preprocessing & EDA")
 
 # Load dataset directly (make sure the file is in the same folder)
-df = pd.read_csv('telco_customer_churn.csv')
+df = pd.read_csv('DataChurn.csv')
 
 st.write("### Raw Data Preview")
 st.dataframe(df.head())
