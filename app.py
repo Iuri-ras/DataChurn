@@ -7,12 +7,13 @@ import seaborn as sns
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, ConfusionMatrixDisplay
+import numpy as np
 
 st.title("Customer Churn Prediction: Data Preparation, EDA & Modeling")
 
 st.markdown("""
-This app performs data cleaning, exploratory data analysis (EDA), and builds a Random Forest model to predict customer churn.
-Upload your dataset as 'DataChurn.csv' in the same directory and run this app.
+This app performs data cleaning, exploratory data analysis (EDA), builds a Random Forest model to predict customer churn,
+and explains model results with performance metrics and feature importance.
 """)
 
 # Load dataset
@@ -190,3 +191,26 @@ disp.plot(ax=ax_cm)
 st.pyplot(fig_cm)
 st.write("**Confusion Matrix:** Shows true vs. predicted labels to understand errors.")
 
+# --- Model Interpretation ---
+st.header("5. Model Interpretation and Summary")
+
+st.markdown(f"""
+Our Random Forest model achieved an **F1 Score of {f1:.3f}** on the test set, which indicates a good balance between identifying customers who churn (recall) and minimizing false alarms (precision).
+
+- The model’s confusion matrix above visualizes true and false predictions for churn.
+- Because customer churn is costly, prioritizing **recall** helps the company identify most at-risk customers and proactively intervene.
+- Random Forest is an ensemble of decision trees, providing robustness and reducing overfitting.
+- Below is a plot of **feature importance**, showing which variables most influence the model’s predictions.
+""")
+
+# Feature importance plot
+importances = model.feature_importances_
+feature_names = X.columns
+indices = np.argsort(importances)[::-1]
+
+fig_feat, ax_feat = plt.subplots(figsize=(10,6))
+sns.barplot(x=importances[indices], y=feature_names[indices], ax=ax_feat)
+ax_feat.set_title("Feature Importance")
+ax_feat.set_xlabel("Importance")
+ax_feat.set_ylabel("Feature")
+st.pyplot(fig_feat)
