@@ -9,10 +9,16 @@ from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, ConfusionMatrixDisplay
 import numpy as np
 
-st.title("Customer Churn Prediction: Data Prep, EDA, Modeling & Deployment")
+st.title("Customer Churn Prediction: Data Preparation, EDA, Modeling & Deployment")
 
-# Load & preprocess dataset once (same as before)
+st.markdown("""
+This app performs data cleaning, exploratory data analysis (EDA), trains a Random Forest model to predict customer churn,  
+and lets you input customer data for live churn prediction.
+""")
+
+# --- Load and preprocess dataset ---
 df = pd.read_csv('DataChurn.csv')
+
 df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
 df = df.dropna(subset=['TotalCharges'])
 df = df.drop(columns=['customerID'])
@@ -144,86 +150,40 @@ elif page == "Model Results":
 elif page == "Predict Churn":
     st.header("3. Predict Customer Churn")
 
-    st.markdown("Fill out the form below with customer data and click 'Predict'.")
+    st.markdown("Fill out the customer information below and click **Predict** to see the churn probability.")
 
     with st.form("prediction_form"):
-        gender = st.selectbox("Gender", ["Female", "Male"])
-        SeniorCitizen = st.selectbox("Senior Citizen", [0, 1])
-        Partner = st.selectbox("Partner", ["Yes", "No"])
-        Dependents = st.selectbox("Dependents", ["Yes", "No"])
-        tenure = st.slider("Tenure (months)", 0, 72, 12)
-        PhoneService = st.selectbox("Phone Service", ["Yes", "No"])
-        MultipleLines = st.selectbox("Multiple Lines", ["No", "Yes", "No phone service"])
-        InternetService = st.selectbox("Internet Service", ["DSL", "Fiber optic", "No"])
-        OnlineSecurity = st.selectbox("Online Security", ["Yes", "No", "No internet service"])
-        OnlineBackup = st.selectbox("Online Backup", ["Yes", "No", "No internet service"])
-        DeviceProtection = st.selectbox("Device Protection", ["Yes", "No", "No internet service"])
-        TechSupport = st.selectbox("Tech Support", ["Yes", "No", "No internet service"])
-        StreamingTV = st.selectbox("Streaming TV", ["Yes", "No", "No internet service"])
-        StreamingMovies = st.selectbox("Streaming Movies", ["Yes", "No", "No internet service"])
-        Contract = st.selectbox("Contract", ["Month-to-month", "One year", "Two year"])
-        PaperlessBilling = st.selectbox("Paperless Billing", ["Yes", "No"])
-        PaymentMethod = st.selectbox("Payment Method", [
-            "Electronic check", "Mailed check", "Bank transfer (automatic)", "Credit card (automatic)"])
-        MonthlyCharges = st.number_input("Monthly Charges", 0.0, 200.0, 70.0)
-        TotalCharges = st.number_input("Total Charges", 0.0, 10000.0, 1000.0)
+        with st.expander("Basic Info", expanded=True):
+            gender = st.selectbox("Gender", ["Female", "Male"], help="Select customer's gender")
+            SeniorCitizen = st.selectbox("Senior Citizen", [0, 1], help="Is the customer a senior citizen? 1 = Yes, 0 = No")
+            Partner = st.selectbox("Partner", ["Yes", "No"], help="Does the customer have a partner?")
+            Dependents = st.selectbox("Dependents", ["Yes", "No"], help="Does the customer have dependents?")
+            tenure = st.slider("Tenure (months)", 0, 72, 12, help="Number of months customer has stayed")
+
+        with st.expander("Service Info"):
+            PhoneService = st.selectbox("Phone Service", ["Yes", "No"], help="Does the customer have phone service?")
+            MultipleLines = st.selectbox("Multiple Lines", ["No", "Yes", "No phone service"], help="Does the customer have multiple phone lines?")
+            InternetService = st.selectbox("Internet Service", ["DSL", "Fiber optic", "No"], help="Customer's internet service type")
+            OnlineSecurity = st.selectbox("Online Security", ["Yes", "No", "No internet service"], help="Does the customer have online security?")
+            OnlineBackup = st.selectbox("Online Backup", ["Yes", "No", "No internet service"], help="Does the customer have online backup?")
+            DeviceProtection = st.selectbox("Device Protection", ["Yes", "No", "No internet service"], help="Does the customer have device protection?")
+            TechSupport = st.selectbox("Tech Support", ["Yes", "No", "No internet service"], help="Does the customer have tech support?")
+            StreamingTV = st.selectbox("Streaming TV", ["Yes", "No", "No internet service"], help="Does the customer use streaming TV?")
+            StreamingMovies = st.selectbox("Streaming Movies", ["Yes", "No", "No internet service"], help="Does the customer use streaming movies?")
+
+        with st.expander("Billing & Contract Info"):
+            Contract = st.selectbox("Contract", ["Month-to-month", "One year", "Two year"], help="Customer's contract type")
+            PaperlessBilling = st.selectbox("Paperless Billing", ["Yes", "No"], help="Does the customer use paperless billing?")
+            PaymentMethod = st.selectbox("Payment Method", [
+                "Electronic check", "Mailed check", "Bank transfer (automatic)", "Credit card (automatic)"], help="Customer's payment method")
+            MonthlyCharges = st.number_input("Monthly Charges", 0.0, 200.0, 70.0, help="Monthly amount charged to customer")
+            TotalCharges = st.number_input("Total Charges", 0.0, 10000.0, 1000.0, help="Total amount charged to customer")
 
         submit = st.form_submit_button("Predict")
 
     if submit:
-        input_dict = {
-            'gender': 1 if gender.lower() == 'male' else 0,
-            'SeniorCitizen': SeniorCitizen,
-            'Partner': 1 if Partner.lower() == 'yes' else 0,
-            'Dependents': 1 if Dependents.lower() == 'yes' else 0,
-            'tenure': tenure,
-            'PhoneService': 1 if PhoneService.lower() == 'yes' else 0,
-            'MultipleLines': MultipleLines,
-            'InternetService': InternetService,
-            'OnlineSecurity': OnlineSecurity,
-            'OnlineBackup': OnlineBackup,
-            'DeviceProtection': DeviceProtection,
-            'TechSupport': TechSupport,
-            'StreamingTV': StreamingTV,
-            'StreamingMovies': StreamingMovies,
-            'Contract': Contract,
-            'PaperlessBilling': 1 if PaperlessBilling.lower() == 'yes' else 0,
-            'PaymentMethod': PaymentMethod,
-            'MonthlyCharges': MonthlyCharges,
-            'TotalCharges': TotalCharges,
-        }
-
-        input_df = pd.DataFrame([input_dict])
-
-        # Simplify no internet/phone service values
-        cols_to_simplify = [
-            'MultipleLines', 'OnlineSecurity', 'OnlineBackup',
-            'DeviceProtection', 'TechSupport', 'StreamingTV', 'StreamingMovies'
-        ]
-        for col in cols_to_simplify:
-            input_df[col] = input_df[col].replace({'No internet service': 'No', 'No phone service': 'No'})
-
-        # One-hot encode categorical variables
-        input_df = pd.get_dummies(input_df, columns=categorical_cols)
-
-        # Add missing columns
-        missing_cols = set(X.columns) - set(input_df.columns)
-        for c in missing_cols:
-            input_df[c] = 0
-
-        # Reorder columns to match training data
-        input_df = input_df[X.columns]
-
-        # Normalize numeric columns
-        for col in ['MonthlyCharges', 'TotalCharges', 'tenure']:
-            idx = list(scaler.feature_names_in_).index(col)
-            min_val = scaler.data_min_[idx]
-            max_val = scaler.data_max_[idx]
-            input_df[col] = (input_df[col] - min_val) / (max_val - min_val)
-
-        pred_prob = model.predict_proba(input_df)[0][1]
-        pred_class = model.predict(input_df)[0]
-
-        st.subheader("Prediction Results")
-        st.write(f"Churn Probability: {pred_prob:.2%}")
-        st.write(f"Predicted Class: {'Churn' if pred_class == 1 else 'No Churn'}")
+        with st.spinner('Calculating churn probability...'):
+            input_dict = {
+                'gender': 1 if gender.lower() == 'male' else 0,
+                'SeniorCitizen': SeniorCitizen,
+                'Partner': 1
