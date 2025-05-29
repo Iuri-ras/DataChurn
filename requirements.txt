@@ -1,2 +1,4 @@
 joblib
 scikit-learn
+matplotlib
+seaborn
